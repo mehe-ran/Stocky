@@ -61,4 +61,11 @@ class forecaster:
 
 
 if __name__ == "__main__":
-    print("Prediction engine initialized.")
+    print("Testing prediction engine with mock MPS tensors...")
+
+    static_mock = torch.randn(1, 5)
+    past_mock = torch.randn(1, 30, 3)
+    future_mock = torch.randn(1, 14, 2)
+
+    engine = forecaster()
+    engine.predict_and_plot("AAPL_Test", static_mock, past_mock, future_mock)
