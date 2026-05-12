@@ -11,18 +11,16 @@ class variableselectionnetwork(nn.Module):
         self.input_sizes = input_sizes
         self.num_inputs = len(input_sizes)
 
-        # calculate total input dimension for the flattened weight network
         total_input_size = sum(input_sizes.values())
+        grn_input_size = total_input_size + hidden_size
 
-        # grn to generate the feature selection weights across all inputs
         self.flattened_grn = gatedresidualnetwork(
-            input_size=total_input_size,
+            input_size=grn_input_size,
             hidden_size=hidden_size,
             output_size=self.num_inputs,
             dropout_rate=dropout_rate
         )
 
-        # individual grns to process each specific input feature independently
         self.single_feature_grns = nn.ModuleDict({
             name: gatedresidualnetwork(
                 input_size=size,
@@ -34,31 +32,25 @@ class variableselectionnetwork(nn.Module):
 
         self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, x: dict, context=None):
-        # x is a dict of tensors: {feature_name: tensor}
-
-        # 1. compute selection weights
-        # flatten all inputs along the feature dimension
-        flattened_inputs = torch.cat(list(x.values()), dim=-1)
+    def forward(self, x: torch.Tensor, context=None):
+        flattened_inputs = x
 
         if context is not None:
-            # append static context if provided to guide temporal variable selection
-            flattened_inputs = torch.cat([flattened_inputs, context], dim=-1)
+            time_steps = x.size(1)
+            expanded_context = context.unsqueeze(1).expand(-1, time_steps, -1)
+            flattened_inputs = torch.cat([flattened_inputs, expanded_context], dim=-1)
 
-        # generate softmax weights for each feature: shape (batch, time, num_inputs)
         sparse_weights = self.flattened_grn(flattened_inputs)
         sparse_weights = self.softmax(sparse_weights)
 
-        # 2. process each feature and apply its corresponding weight
         processed_features = []
-        for i, (name, tensor) in enumerate(x.items()):
-            # pass feature through its dedicated grn
-            processed = self.single_feature_grns[name](tensor)
+        current_idx = 0
 
-            # extract weight for this specific feature and expand dimensions for broadcasting
+        for i, (name, size) in enumerate(self.input_sizes.items()):
+            feature_tensor = x[..., current_idx: current_idx + size]
+            current_idx += size
+            processed = self.single_feature_grns[name](feature_tensor)
             weight = sparse_weights[..., i].unsqueeze(-1)
             processed_features.append(processed * weight)
 
-        # 3. sum the weighted features together
-        # final shape: (batch, time, hidden_size)
         return torch.stack(processed_features, dim=-1).sum(dim=-1), sparse_weights
