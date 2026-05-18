@@ -13,14 +13,14 @@ def train_epoch(model: nn.Module, dataloader: DataLoader, optimizer: torch.optim
         # move tensors to mps device and strictly enforce contiguous memory layout
         static = batch["static"].to(device, non_blocking=True).contiguous()
         past = batch["past"].to(device, non_blocking=True).contiguous()
-        known_future = batch["known_future"].to(device, non_blocking=True).contiguous()
+        future = batch["future"].to(device, non_blocking=True).contiguous()
         target = batch["target"].to(device, non_blocking=True).contiguous()
 
         # zero gradients
         optimizer.zero_grad()
 
         # forward pass
-        outputs = model(static, past, known_future)
+        outputs = model(static, past, future)
 
         # calculate quantile loss for volatility forecasting
         loss = criterion(outputs, target)
@@ -55,10 +55,10 @@ def validate_epoch(model: nn.Module, dataloader: DataLoader, criterion: nn.Modul
         for batch in dataloader:
             static = batch["static"].to(device).contiguous()
             past = batch["past"].to(device).contiguous()
-            known_future = batch["known_future"].to(device).contiguous()
+            future = batch["future"].to(device).contiguous()
             target = batch["target"].to(device).contiguous()
 
-            outputs = model(static, past, known_future)
+            outputs = model(static, past, future)
             loss = criterion(outputs, target)
             total_loss += loss.item()
 
