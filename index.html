@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STOCKY TERMINAL</title>
+    <style>
+        body {
+            margin: 0; padding: 0; background-color: #000000; color: #cccccc;
+            font-family: 'Courier New', Courier, monospace; display: flex; height: 100vh;
+        }
+        .sidebar {
+            width: 320px; background-color: #0a0a0a; border-right: 1px solid #333333;
+            padding: 30px 20px; display: flex; flex-direction: column; gap: 20px;
+        }
+        .main-content {
+            flex-grow: 1; display: flex; align-items: center; justify-content: center;
+            padding: 20px; overflow: hidden; position: relative;
+        }
+        h2 { margin: 0 0 5px 0; color: #ffffff; font-size: 1.2rem; }
+        .subtitle { color: #666666; font-size: 0.85rem; margin-bottom: 20px; }
+        .disclaimer {
+            background-color: #111111; border-left: 2px solid #333333;
+            padding: 15px; font-size: 0.8rem; color: #888888; margin-bottom: 20px;
+        }
+        label { font-size: 0.85rem; color: #999999; margin-bottom: 5px; display: block; }
+        input {
+            width: 100%; box-sizing: border-box; background-color: #111111;
+            border: 1px solid #333333; color: #00e5ff; padding: 12px;
+            font-family: inherit; font-size: 1rem; outline: none; margin-bottom: 15px;
+        }
+        input:focus { border-color: #00e5ff; }
+        button {
+            width: 100%; background-color: #000000; border: 1px solid #00e5ff;
+            color: #00e5ff; padding: 15px; font-family: inherit; font-weight: bold;
+            font-size: 1rem; cursor: pointer; transition: all 0.2s;
+        }
+        button:hover { background-color: #00e5ff; color: #000000; }
+
+        /* terminal status display */
+        .status-box {
+            font-size: 0.85rem; padding: 15px; border: 1px solid #333333;
+            background-color: #050505; color: #666666; min-height: 40px;
+            white-space: pre-wrap; overflow-wrap: break-word;
+        }
+
+        #dashboard-img { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div>
+            <h2>STOCKY</h2>
+            <div class="subtitle">QUANTITATIVE FORECAST TERMINAL</div>
+        </div>
+
+        <div class="disclaimer">
+            > <strong>DISCLAIMER:</strong> built for educational and research purposes only. does not constitute financial advice. do not trade real capital based on these algorithmic outputs.
+        </div>
+
+        <div>
+            <label for="ticker">TICKER SYMBOL</label>
+            <input type="text" id="ticker" placeholder="e.g., AAPL" value="AAPL">
+
+            <label for="cost">AVERAGE COST (OPTIONAL)</label>
+            <input type="number" id="cost" placeholder="0.00" step="0.01">
+
+            <button onclick="runForecast()">EXECUTE FORECAST</button>
+        </div>
+
+        <div class="status-box" id="status">system ready. waiting for input...</div>
+    </div>
+
+    <div class="main-content">
+        <img id="dashboard-img" alt="terminal forecast output">
+    </div>
+
+    <script>
+        async function runForecast() {
+            const ticker = document.getElementById('ticker').value.toUpperCase() || "AAPL";
+            const costInput = document.getElementById('cost').value;
+            const statusBox = document.getElementById('status');
+            const imgEl = document.getElementById('dashboard-img');
+
+            const payload = { ticker: ticker };
+            if (costInput && !isNaN(parseFloat(costInput))) {
+                payload.purchase_price = parseFloat(costInput);
+            }
+
+            imgEl.style.display = "none";
+            statusBox.style.color = "#00e5ff";
+            statusBox.innerText = `[system] allocating mps compute...\n[system] fetching ${ticker} market data...`;
+
+            try {
+                const response = await fetch('/api/forecast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || "unknown error occurred");
+                }
+
+                imgEl.src = data.image;
+                imgEl.style.display = "block";
+                statusBox.style.color = "#00e676";
+                statusBox.innerText = `[success] dashboard rendered for ${ticker}.`;
+
+            } catch (error) {
+                statusBox.style.color = "#ff1744";
+                statusBox.innerText = `[error] execution failed.\n> ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
