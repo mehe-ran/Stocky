@@ -30,17 +30,18 @@ def main():
     pipeline = marketdatacollector(tickers=["AAPL", "MSFT"], start_date="2022-01-01", end_date="2024-01-01")
     df = pipeline.fetch_data()
 
-    continuous_features = ['Close', 'Volume', 'returns', 'volatility_7d', 'rsi_14']
+    # scale the new continuous macro features alongside technicals
+    continuous_features = ['Close', 'Volume', 'returns', 'volatility_7d', 'rsi_14', 'vix_close', 'fed_funds_rate']
     df_scaled = pipeline.scale_features(df, continuous_features)
 
-    # create datasets and dataloaders
+    # create datasets and dataloaders with v2 columns
     logger.info("building datasets...")
     dataset = stockydataset(
         df=df_scaled,
         group_col='ticker',
         static_cols=[],
-        past_cols=['Close', 'Volume', 'rsi_14'],
-        known_future_cols=['day_of_week', 'month'],
+        past_cols=['Close', 'Volume', 'rsi_14', 'vix_close', 'fed_funds_rate'],
+        known_future_cols=['day_of_week', 'month', 'is_earnings_day'],
         target_col='Close',
         max_encoder_length=30,
         max_prediction_length=14
@@ -49,18 +50,14 @@ def main():
     # pin_memory set to false for apple silicon compatibility
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True, pin_memory=False)
 
-    # initialize model and training components
+    # initialize model and training components with new tensor dimensions
     logger.info("initializing model...")
     model = temporalfusiontransformer(
         static_input_size=1,
-        past_input_sizes={"Close": 1, "Volume": 1, "rsi_14": 1},
-        future_input_sizes={"day_of_week": 1, "month": 1},
+        past_input_sizes={"Close": 1, "Volume": 1, "rsi_14": 1, "vix_close": 1, "fed_funds_rate": 1},
+        future_input_sizes={"day_of_week": 1, "month": 1, "is_earnings_day": 1},
         hidden_size=64
     ).to(device)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    criterion = quantileloss(quantiles=[0.1, 0.5, 0.9])
-    stopper = earlystopping(patience=5, save_path='checkpoints/best_tft_model.pt')
 
     # training loop
     logger.info("starting training...")
