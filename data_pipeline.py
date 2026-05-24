@@ -32,6 +32,18 @@ class marketdatacollector:
             df = df.copy()
             df['ticker'] = ticker
 
+            # fetch historical earnings dates safely
+            try:
+                earnings_df = stock.get_earnings_dates(limit=100)
+                if earnings_df is not None and not earnings_df.empty:
+                    # strip timezones and normalize to pure dates
+                    earnings_dates = earnings_df.index.tz_localize(None).normalize()
+                else:
+                    earnings_dates = []
+            except Exception:
+                # fallback to empty array if data is missing for this ticker
+                earnings_dates = []
+
             # yfinance index is timezone-aware, strip it for merging
             df.index = df.index.tz_localize(None)
             df.reset_index(inplace=True)
@@ -47,6 +59,11 @@ class marketdatacollector:
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
             df['rsi_14'] = 100 - (100 / (1 + rs))
+
+            # engineer the earnings binary flag
+            df['is_earnings_day'] = 0
+            if len(earnings_dates) > 0:
+                df.loc[df['date'].dt.normalize().isin(earnings_dates), 'is_earnings_day'] = 1
 
             # merge the macro data (inner join aligns trading days exactly)
             df = pd.merge(df, macro_df, on='date', how='inner')
